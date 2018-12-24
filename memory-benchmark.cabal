@@ -30,4 +30,5 @@ executable memory-benchmark
               -with-rtsopts=-N
               -O2
               -fno-full-laziness
+              -eventlog
   default-language:    Haskell2010
