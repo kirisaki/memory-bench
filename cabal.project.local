@@ -1,1 +1,2 @@
-optimization: 2
+profiling: True
+optimization: True
