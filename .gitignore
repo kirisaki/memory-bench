@@ -3,3 +3,8 @@ dist/
 dist-newstyle/
 bench.html
 *.eventlog
+*.pdf
+*.ps
+*.hp
+*.prof
+*.aux

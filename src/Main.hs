@@ -2,58 +2,52 @@
 module Main where
 
 import Control.Concurrent
-import Control.DeepSeq
-import Control.Exception (evaluate)
+import Control.Concurrent.MVar
 import Control.Monad
 import Foreign.ForeignPtr
 import Foreign.Ptr
 import Foreign.Marshal.Alloc
 import Foreign.Storable
 import Data.Word
-import GHC.IO.Buffer
 import System.Environment (getArgs)
 import System.Random
 
 type Socket = ()
 
-bufLen = 4096
-bufNum = 2000
-rounds = 10
-threads = 100000
-latency = 1000
-interval = 0
+bufSize = 128 * 1024
+threads = 10000
 
 recvBuf :: Socket -> Ptr Word8 -> Int -> IO Int
 recvBuf _ ptr len = do
-  forM_ (take len [0..]) $ \off -> do
-    val <- randomIO :: IO Word8
-    threadDelay latency
-    ptr `plusPtr` off `poke` val
-  return len
+  randomRIO (0, 100) >>= threadDelay
+  length <$> (forM (take len [0..]) $ \off -> 
+                 ptr `plusPtr` off `poke` (0x00 :: Word8))
 
 withBuf :: ((Ptr Word8 -> IO ()) -> IO ()) -> IO ()
-withBuf f = replicateM_ rounds
-  (threadDelay interval >> replicateM_ threads
-    (forkIO . replicateM_ bufNum $ f
-     (\ptr -> 
-         void $ recvBuf () ptr bufLen
-     )
-    )
-  )
+withBuf io = do
+  locks <- replicateM threads newEmptyMVar
+  forM_ locks $ \l -> do
+    randomRIO (0, 10000) >>= threadDelay
+    forkIO . io $  \ptr ->
+      void $ recvBuf () ptr bufSize
+    putMVar l ()
+  mapM_ takeMVar locks
+
 
 
 withAlloca :: IO ()
-withAlloca = withBuf $ allocaBytes bufLen
+withAlloca = withBuf $ allocaBytes bufSize
+
 
 withMalloc :: IO ()
 withMalloc = withBuf $ \io -> do
-  ptr <- mallocBytes bufLen
-  io ptr
+  ptr <- mallocBytes bufSize
+  len <- io ptr
   free ptr
 
 withMallocForeign :: IO ()
 withMallocForeign = withBuf $ \io -> do
-  ptr <- mallocBytes bufLen
+  ptr <- mallocBytes bufSize
   ptr' <- newForeignPtr finalizerFree ptr
   withForeignPtr ptr' io
 
